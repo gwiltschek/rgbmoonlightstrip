@@ -24,19 +24,33 @@ long strip_colors[STRIP_LENGTH];
 int currcolor = 0;
 int currstep = 0;
 int steps = 100;
-int step_delay = 50;
+int step_delay = 25;
+int moon_delay = 100;
 long colors[8] = {
   0x000000,
   0xF00000,
   0xFF0000,
   0xFFF000,
   0xFFFF00,
+  0xFFFFF0,
   0xFFFFFF,
-  0xFFFF00,
   0xFF0000
 };
 
+enum state {
+	rise,
+	dawn,
+	moon
+};
+
+state currentstate = rise;
+
+int moonPos;
+long moonColor;
+
+
 void setup() {
+	randomSeed(analogRead(0));
 
 	pinMode(SDI, OUTPUT);
 	pinMode(CKI, OUTPUT);
@@ -67,14 +81,87 @@ void loop() {
 	post_frame();
 
 	while(1) {
-		currstep++;
-		interpolate();
-		if (steps == currstep) {
-			currstep = 0;
-			currcolor = (currcolor + 1) % 8;
+
+		if (currentstate == rise) {
+			currstep++;
+			interpolate();
+			if (steps == currstep) {
+				currstep = 0;
+				currcolor = (currcolor + 1) % 8;
+				if (currcolor == 7) {
+					currentstate = moon;
+					initiateMoon();
+					while (currentstate == moon) {
+						moveMoon();
+					}
+				}
+			}
+			post_frame();
+			delay(step_delay);
 		}
+		else if (currentstate == moon) {
+		}
+	}
+}
+
+void initiateMoon() {
+	clearAll();
+	
+	// get random position
+	moonPos = STRIP_LENGTH/2 + random(5);
+	// get random color
+	moonColor = random(0xFFFFFF);
+	strip_colors[moonPos] = moonColor;
+
+	post_frame();
+}
+
+void moveMoon() {
+	if (moonPos == 1) {
+		currentstate = rise;
+		return;
+	}
+
+	clearAll();
+	double percentFade = 0;
+	
+	while (percentFade <= 1) {
+		long endColor = moonColor;
+		long startColor = 0x000000;
+		
+		long startRed = startColor >> 16;
+		long startGreen = (startColor >> 8) & 0xff;
+		long startBlue = startColor & 0xff;
+		
+		long endRed = endColor >> 16;
+		long endGreen = (endColor >> 8) & 0xff;
+		long endBlue = endColor & 0xff;
+
+		long diffRed = endRed - startRed;
+		long diffGreen = endGreen - startGreen;
+		long diffBlue = endBlue - startBlue;
+
+
+		diffRed = (diffRed * percentFade) + startRed;
+		diffGreen = (diffGreen * percentFade) + startGreen;
+		diffBlue = (diffBlue * percentFade) + startBlue;
+
+		long newColor = (((diffRed << 8) | diffGreen) << 8) | diffBlue;
+
+		strip_colors[moonPos] = moonColor - newColor;
+		strip_colors[moonPos - 1] = newColor;
+		delay(moon_delay);
 		post_frame();
-		delay(step_delay);
+		percentFade += 0.01;
+	}
+
+	moonPos--;
+}
+
+void clearAll() {
+	int i = 0;
+	for (i = 0; i < STRIP_LENGTH; i++) {
+		strip_colors[i] = 0x000000;
 	}
 }
 
