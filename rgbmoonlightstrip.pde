@@ -19,22 +19,35 @@ int SDI = 2; //Red wire (not the red 5V wire!)
 int CKI = 3; //Green wire
 int ledPin = 13; //On board LED
 
+int STOP = 0;
 #define STRIP_LENGTH 32
 long strip_colors[STRIP_LENGTH];
 int currcolor = 0;
 int currstep = 0;
-int steps = 100;
-int step_delay = 25;
+int steps = 500;
+int step_delay = 500;
 int moon_delay = 100;
-long colors[8] = {
+long colors[8];
+
+long colors_rise[8] = {
   0x000000,
-  0xF00000,
+  0x220000,
+  0x990000,
   0xFF0000,
-  0xFFF000,
+  0x999900,
   0xFFFF00,
-  0xFFFFF0,
+  0xAAAAAA,
+  0xFFFFFF
+};
+long colors_dawn[8] = {
   0xFFFFFF,
-  0xFF0000
+  0xFFFF00,
+  0xFF0000,
+  0xAA0000,
+  0x0A0000,
+  0x060000,
+  0x030000,
+  0x000000,
 };
 
 enum state {
@@ -67,12 +80,16 @@ void setup() {
 void loop() {
 	int i = 0;
 
-	//Pre-fill the color array with known values
-	strip_colors[0] = 0xFF0000; //Bright Red
-	strip_colors[1] = 0x00FF00; //Bright Green
-	strip_colors[2] = 0x0000FF; //Bright Blue
+	get_currentstate();
 
-	post_frame(); //Push the current color frame to the strip
+	for (i = 0; i < 8; i++) {
+		if (currentstate == rise) {
+			colors[i] = colors_rise[i];
+		}
+		else {
+			colors[i] = colors_dawn[i];
+		}
+	}
 
 	delay(1000);
 	for (i = 0; i < STRIP_LENGTH; i++) {
@@ -81,48 +98,85 @@ void loop() {
 	post_frame();
 
 	while(1) {
+		if (STOP == 1) {
+			while(1) {
 
-		if (currentstate == rise) {
-			currstep++;
-			interpolate();
-			if (steps == currstep) {
-				currstep = 0;
-				currcolor = (currcolor + 1) % 8;
+			}
+		}
+			
+		currstep++;
+		interpolate();
+		if (steps == currstep) {
+			currstep = 0;
+			currcolor = (currcolor + 1) % 8;
+			if (currentstate == dawn) {
 				if (currcolor == 7) {
-					currentstate = moon;
+					Serial.println("MOON INIT");
 					initiateMoon();
+					currentstate = moon;
 					while (currentstate == moon) {
 						moveMoon();
 					}
 				}
 			}
-			post_frame();
-			delay(step_delay);
+			else {
+				if (currcolor == 7) {
+					post_frame();	
+					STOP = 1;
+				}
+			}
 		}
-		else if (currentstate == moon) {
-		}
+		post_frame();
+		delay(step_delay);
 	}
 }
 
+void get_currentstate() {
+	currentstate = dawn;
+
+	Serial.println(currentstate);
+}
+
 void initiateMoon() {
-	clearAll();
 	
 	// get random position
-	moonPos = STRIP_LENGTH/2 + random(5);
+	moonPos = STRIP_LENGTH - 3;
 	// get random color
 	moonColor = random(0xFFFFFF);
-	strip_colors[moonPos] = moonColor;
 
-	post_frame();
+	int i = 0;
+	int moonSteps = 50;	
+	for (i = 0; i < moonSteps; i++) {
+		long red = moonColor >> 16;
+		long green = (moonColor >> 8) & 0xff;
+		long blue = moonColor & 0xff;
+
+		red = red * i  / moonSteps;
+		green = green * i / moonSteps;
+		blue = blue * i / moonSteps;
+		
+		long newColor = (((red << 8) | green) << 8) | blue;
+
+		strip_colors[moonPos] = newColor;
+		Serial.println(i);
+		Serial.println(moonPos);
+		Serial.println(strip_colors[moonPos]);
+		post_frame();
+		delay(200);
+	}
+
 }
 
 void moveMoon() {
 	if (moonPos == 1) {
+		STOP = 1;
 		currentstate = rise;
 		return;
 	}
 
+
 	clearAll();
+
 	double percentFade = 0;
 	
 	while (percentFade <= 1) {
@@ -190,15 +244,7 @@ void interpolate() {
 	diffGreen = (diffGreen * percentFade) + startGreen;
 	diffBlue = (diffBlue * percentFade) + startBlue;
 
-	Serial.println("--------------");
-	Serial.println(currstep, DEC);
-	Serial.println(steps, DEC);
-	Serial.println(percentFade, DEC);
-
 	newColor = (((diffRed << 8) | diffGreen) << 8) | diffBlue;
-
-	Serial.println(newColor, HEX);
-
 
 	for (i = 0; i < STRIP_LENGTH; i++) {
 		strip_colors[i] = newColor;
