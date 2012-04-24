@@ -24,8 +24,8 @@ int STOP = 0;
 long strip_colors[STRIP_LENGTH];
 int currcolor = 0;
 int currstep = 0;
-int steps = 500;
-int step_delay = 500;
+int steps = 200;
+int step_delay = 300;
 int moon_delay = 100;
 long colors[8];
 
@@ -44,7 +44,7 @@ long colors_dawn[8] = {
   0xFFFF00,
   0xFF0000,
   0xAA0000,
-  0x0A0000,
+  0x660000,
   0x060000,
   0x030000,
   0x000000,
@@ -77,10 +77,32 @@ void setup() {
 	Serial.begin(9600);
 }
 
+int get_neon() {
+	return 1;
+}
+
 void loop() {
 	int i = 0;
 
-	get_currentstate();
+	int neon = get_neon();
+
+	if (neon == 0) {
+		// dark in the tank, so do sunrise
+		currentstate = rise;
+	}
+	else {
+		// light in tank, so turn on LEDs and  do sunset
+		for(int x = 0 ; x < STRIP_LENGTH ; x++){
+			strip_colors[x] = 0xFFFFFF;
+		}
+		post_frame();
+		currentstate = dawn;
+	}
+	/*
+	 *while(get_neon() == neon) {
+	 *    // do nothing
+	 *}
+	 */
 
 	for (i = 0; i < 8; i++) {
 		if (currentstate == rise) {
@@ -90,12 +112,6 @@ void loop() {
 			colors[i] = colors_dawn[i];
 		}
 	}
-
-	delay(1000);
-	for (i = 0; i < STRIP_LENGTH; i++) {
-		strip_colors[i] = 0;
-	}  
-	post_frame();
 
 	while(1) {
 		if (STOP == 1) {
