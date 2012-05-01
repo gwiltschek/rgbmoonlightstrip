@@ -20,13 +20,14 @@
 int SDI = 2; //Red wire (not the red 5V wire!)
 int CKI = 3; //Green wire
 int ledPin = 13; //On board LED
+int lightSensorPin = 0;
 
 int STOP = 0;
 int currcolor = 0;
 int currstep = 0;
-int steps = 200;
-int step_delay = 300;
-int moon_delay = 100;
+int steps = 300;
+int step_delay = 400;
+int moon_delay = 150;
 int moonPos;
 long moonColor;
 
@@ -75,15 +76,16 @@ void setup() {
 void loop() {
 	int i = 0;
 
+	// get current tank status
 	int neon = get_neon();
 
 	if (neon == 0) {
-		// dark in the tank, so do sunrise
+		// night in the tank, so do sunrise
 		currentstate = rise;
 	}
 	else {
-		// light in tank, so turn LEDs to full white
-		// and wait until tank light goes off
+		// day in tank, so turn LEDs to full white
+		// and wait until tank light goes off / night starts
 		for(int x = 0 ; x < STRIP_LENGTH ; x++){
 			strip_colors[x] = 0xFFFFFF;
 		}
@@ -91,7 +93,10 @@ void loop() {
 		currentstate = dawn;
 		while(get_neon() == neon) {
 			// wait until tank light turns off
+			delay(100);
+			Serial.println("waiting...");
 		}
+		Serial.println("exit waiting loop");
 	}
 	
 	for (i = 0; i < 8; i++) {
@@ -104,9 +109,11 @@ void loop() {
 	}
 
 	while(1) {
+
+		// after one sunrise or sunset, just wait until power goes off
 		if (STOP == 1) {
 			while(1) {
-
+				delay(100000);
 			}
 		}
 			
@@ -137,10 +144,22 @@ void loop() {
 	}
 }
 
-// return 1 if light is on
-// return 0 if light is off
-// TODO
+// returns 1 if light is on
+// returns 0 if light is off
+// 
+//           PhotoR     10K
+// +5    o---/\/\/--.--/\/\/---o GND
+//                  |
+// Pin 0 o-----------
+//
+// taken from http://www.arduino.cc/playground/Learning/PhotoResistor
 int get_neon() {
+	int input = -1;
+	input = analogRead(lightSensorPin);
+	Serial.println(input);
+	
+	// values may vary
+	if (input < 50) { return 0; }
 	return 1;
 }
 
