@@ -1,4 +1,10 @@
 /*
+	Aquarium sunrise/sunset/moonlight sketch for an arduino-controlled
+	RGB led strip.
+
+	Interpolates between predefined colors from an array/moves a 1-2 LED wide
+	moon along the strip.
+
 	Based on code by Nathan Seidle, SparkFun Electronics 2011
 	http://www.sparkfun.com/datasheets/Components/LED/LED_Strip_Example.pde
 	http://www.sparkfun.com/products/10312
@@ -17,13 +23,14 @@
 
 #define STRIP_LENGTH 32
 
-int SDI = 2; //Red wire (not the red 5V wire!)
-int CKI = 3; //Green wire
-int ledPin = 13; //On board LED
-int lightSensorPin = 0;
+// IO Pins
+int SDI = 2; // Red wire (not the red 5V wire!)
+int CKI = 3; // Green wire
+int ledPin = 13; // On board LED
+int lightSensorPin = 0; // see get_neon()
 
 int STOP = 0;
-int currcolor = 0;
+int currcolor = 0; // current index in colors[]
 int currstep = 0;
 int steps = 300;
 int step_delay = 400;
@@ -31,8 +38,11 @@ int moon_delay = 150;
 int moonPos;
 long moonColor;
 
-long strip_colors[STRIP_LENGTH];
-long colors[8];
+long strip_colors[STRIP_LENGTH]; // colors for post_frame()
+
+// pre-defined colors for sunrise/sunset
+// get copied to colors[] on startup depending on
+// current light in tank
 long colors_rise[8] = {
   0x000000,
   0x220000,
@@ -53,6 +63,7 @@ long colors_dawn[8] = {
   0x030000,
   0x000000,
 };
+long colors[8];
 
 enum state {
 	rise,
@@ -63,20 +74,17 @@ state currentstate = rise;
 
 void setup() {
 	randomSeed(analogRead(0));
-
 	pinMode(SDI, OUTPUT);
 	pinMode(CKI, OUTPUT);
 	pinMode(ledPin, OUTPUT);
-
 	Serial.begin(9600);
-
 	clearAll();
 }
 
 void loop() {
 	int i = 0;
 
-	// get current tank status
+	// get current tank light status
 	int neon = get_neon();
 
 	if (neon == 0) {
@@ -98,7 +106,8 @@ void loop() {
 		}
 		Serial.println("exit waiting loop");
 	}
-	
+
+	// copy color array depending on current light in tank
 	for (i = 0; i < 8; i++) {
 		if (currentstate == rise) {
 			colors[i] = colors_rise[i];
@@ -109,8 +118,9 @@ void loop() {
 	}
 
 	while(1) {
-
-		// after one sunrise or sunset, just wait until power goes off
+		
+		// after one full sunrise or sunset,
+		// just wait until power goes off
 		if (STOP == 1) {
 			while(1) {
 				delay(100000);
@@ -119,58 +129,79 @@ void loop() {
 			
 		currstep++;
 		interpolate();
+
 		if (steps == currstep) {
+			// transition between two colors finished, move
+			// on to the next colir
 			currstep = 0;
 			currcolor = (currcolor + 1) % 8;
+			
 			if (currentstate == dawn) {
+
+				// moon phase starts if state is dawn and
+				// we are at the last color of our colors[] array
 				if (currcolor == 7) {
-					Serial.println("MOON INIT");
 					initiateMoon();
 					currentstate = moon;
 					while (currentstate == moon) {
 						moveMoon();
 					}
 				}
+
 			}
 			else {
+
+				// if currentcolor is the last color in colors[]
+				// and state is not dawn, we are finished with sunrise
 				if (currcolor == 7) {
 					post_frame();	
 					STOP = 1;
 				}
 			}
 		}
+
 		post_frame();
 		delay(step_delay);
 	}
 }
 
+// photoresistor attached to indicator LED of timer
 // returns 1 if light is on
 // returns 0 if light is off
 // 
-//           PhotoR     10K
-// +5    o---/\/\/--.--/\/\/---o GND
-//                  |
-// Pin 0 o-----------
+//             PhotoR     10K
+//   +5    o---/\/\/--.--/\/\/---o GND
+//                    |
+//   Pin 0 o-----------
 //
-// taken from http://www.arduino.cc/playground/Learning/PhotoResistor
+// (taken from http://www.arduino.cc/playground/Learning/PhotoResistor)
 int get_neon() {
 	int input = -1;
 	input = analogRead(lightSensorPin);
 	Serial.println(input);
 	
-	// values may vary
-	if (input < 50) { return 0; }
-	return 1;
+	// values may vary, for me
+	// timer LED on is about 130, off  is ~25
+	if (input < 50) {
+		return 0;
+	}
+	else {
+		return 1;
+	}
 }
 
+// let the moonlight fade in with a random color
 void initiateMoon() {
-	moonPos = STRIP_LENGTH - 3;
-	int moonInitSteps = 50;	
 	int i = 0;
+	int moonInitSteps = 50;	
+	
+	// set position
+	moonPos = STRIP_LENGTH - 3;
 	
 	// get random color
 	moonColor = random(0xFFFFFF);
 
+	// do moonInitSteps steps from 0% to 100% moonColor
 	for (i = 0; i < moonInitSteps; i++) {
 		long red = moonColor >> 16;
 		long green = (moonColor >> 8) & 0xff;
@@ -189,17 +220,20 @@ void initiateMoon() {
 	}
 }
 
+// move the moon along the LED strip
 void moveMoon() {
+	double percentFade = 0;	
+	
 	if (moonPos == 1) {
 		// end moon movement
 		STOP = 1;
 		return;
 	}
 
+	// clear old moon
 	clearAll();
 
-	double percentFade = 0;
-	
+	// move moonlight between two leds
 	while (percentFade <= 1) {
 		long endColor = moonColor;
 		long startColor = 0x000000;
@@ -215,7 +249,6 @@ void moveMoon() {
 		long diffRed = endRed - startRed;
 		long diffGreen = endGreen - startGreen;
 		long diffBlue = endBlue - startBlue;
-
 
 		diffRed = (diffRed * percentFade) + startRed;
 		diffGreen = (diffGreen * percentFade) + startGreen;
@@ -240,6 +273,7 @@ void clearAll() {
 	}
 }
 
+// fill strip_colors with interpolated values from colors[x] and colors[x+1]
 void interpolate() {
 	int i = 0;
 
