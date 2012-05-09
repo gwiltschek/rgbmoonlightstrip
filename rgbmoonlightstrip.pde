@@ -28,6 +28,7 @@ int SDI = 2; // Red wire (not the red 5V wire!)
 int CKI = 3; // Green wire
 int ledPin = 13; // On board LED
 int lightSensorPin = 0; // see get_neon()
+int randomPin = 1;
 
 int STOP = 0;
 int currcolor = 0; // current index in colors[]
@@ -73,7 +74,7 @@ enum state {
 state currentstate = rise;
 
 void setup() {
-	randomSeed(analogRead(0));
+	randomSeed(analogRead(randomPin));
 	pinMode(SDI, OUTPUT);
 	pinMode(CKI, OUTPUT);
 	pinMode(ledPin, OUTPUT);
