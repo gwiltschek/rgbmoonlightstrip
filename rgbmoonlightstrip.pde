@@ -21,7 +21,7 @@
 	Red = SDI
 */
 
-#define STRIP_LENGTH 32
+#define STRIP_LENGTH (32)
 
 // IO Pins
 int SDI = 2; // Red wire (not the red 5V wire!)
@@ -200,7 +200,7 @@ void initiateMoon() {
 	moonPos = STRIP_LENGTH - 3;
 	
 	// get random color
-	moonColor = random(0xFFFFFF);
+	moonColor = (((random(0xFF) << 8) | random(0xFF)) << 8) | random(0xFF);
 
 	// do moonInitSteps steps from 0% to 100% moonColor
 	for (i = 0; i < moonInitSteps; i++) {
